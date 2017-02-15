@@ -1,0 +1,102 @@
+== Install Libreboot ==
+
+From Chrome OS (screw removed):
+Ctrl + D
+Ctrl + Shift + Alt + R > Powerwash
+Enable debugging features > Set temporary root password
+Ctrl + Alt + Next
+
+Login as root
+crossystem dev_boot_signed_only=0
+crossystem dev_boot_usb=1
+
+cd /tmp
+wget https://libreboot.org/release/stable/20160907/rom/depthcharge/libreboot_r20160907_depthcharge_veyron_speedy.tar.xz
+tar -xf libreboot_r20160907_depthcharge_veyron_speedy.tar.xz
+cd libreboot_r20160907_depthcharge_veyron_speedy
+chmod a+x cros-flash-replace
+flashrom -p host -r flash.img
+
+Insert USB drive
+mount /dev/sda1 /mnt
+cp flash.img /mnt
+umount /mnt
+
+sh cros-flash-replace flash.img coreboot ro-frid
+flashrom -p host -w flash.img
+reboot
+
+
+== Prepare Arch Linux USB drive ==
+
+Insert USB drive
+* USB drive is /dev/sdc in my case, but may be different elsewhere
+
+sudo umount /dev/sdc*
+sudo fdisk /dev/sdc -> g -> w
+sudo cgpt create /dev/sdc
+sudo cgpt add -i 1 -t kernel -b 8192 -s 32768 -l Kernel -S 1 -T 5 -P 10 /dev/sdc
+sudo cgpt show /dev/sdc
+	look for start offset of  'Sec GPT table' (e.g. 15633375) this is 'xxxxx' below
+cgpt add -i 2 -t data -b 40960 -s `expr xxxxx - 40960` -l Root /dev/sdc
+partx -a /dev/sdc
+mkfs.ext4 /dev/sdc2
+
+cd /tmp
+wget http://os.archlinuxarm.org/os/ArchLinuxARM-veyron-latest.tar.gz
+mkdir root
+mount /dev/sda2 root
+tar -xf ArchLinuxARM-veyron-latest.tar.gz -C root
+dd if=root/boot/vmlinux.kpart of=/dev/sdc1
+umount root
+sync
+reboot
+
+
+== Boot from USB temporarily on the C201 ==
+
+Press Ctrl + U in depthcharge
+Login as root / root
+Run 'wifi-menu' to connect to a network
+
+
+== Install to internal storage ==
+
+From Arch on the C201 (USB):
+
+pacman -S wget
+sudo umount /dev/mmcblk0*
+sudo fdisk /dev/mmcblk0 -> g -> w
+sudo cgpt create /dev/mmcblk0
+sudo cgpt add -i 1 -t kernel -b 8192 -s 32768 -l Kernel -S 1 -T 5 -P 10 /dev/mmcblk0
+sudo cgpt show /dev/mmcblk0
+	look for start offset of  'Sec GPT table' (e.g. 15633375) this is 'xxxxx' below
+cgpt add -i 2 -t data -b 40960 -s `expr xxxxx - 40960` -l Root /dev/mmcblk0
+partx -a /dev/mmcblk0
+mkfs.ext4 /dev/mmcblk0p2
+
+cd /tmp
+wget http://os.archlinuxarm.org/os/ArchLinuxARM-veyron-latest.tar.gz
+mkdir root
+mount /dev/mmcblk0p2 root
+tar -xf ArchLinuxARM-veyron-latest.tar.gz -C root
+dd if=root/boot/vmlinux.kpart of=/dev/mmcblk0p1
+umount root
+sync
+reboot
+
+Remove USB drive
+
+
+== Boot the final OS ==
+
+From Arch on the C201 (internal storage):
+
+Login as root / root
+Run 'wifi-menu' to connect to a network
+
+
+== Deblob as much as possible ==
+
+pacman -Rdd linux-firmware
+Optional: pacman -R firmware-veyron # this will break the internal WiFi!
